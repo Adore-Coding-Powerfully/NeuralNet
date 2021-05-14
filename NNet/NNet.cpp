@@ -4,7 +4,8 @@ namespace net {
     Linear::Linear(int input_size, int output_size) {
         this->input_size = input_size;
         this->output_size = output_size;
-        layer = matrix<double>(1, output_size);
+        not_activated_layer = matrix<double>(1, output_size);
+        layer = not_activated_layer;
         bias = matrix<double>(output_size, 1);
         weights = matrix<double>(input_size, output_size);
         {
@@ -32,8 +33,13 @@ namespace net {
         push_forward(input_layer);
     }
 
+    matrix<double>& Linear::get_weights(){
+        return weights;
+    }
+
     void Linear::push_forward(const matrix<double>& input_layer){
-        layer = input_layer * weights;
+        not_activated_layer = input_layer * weights;
+        layer = not_activated_layer;
     }
 
     void Linear::soft_max(){
@@ -54,15 +60,22 @@ namespace net {
         });
     }
 
+    matrix<double>& Linear::apply_derivative_function(){
+        not_activated_layer.aggregate([](double& value){
+            value = ReLU_derivative(value);
+        });
+        return not_activated_layer;
+    }
+
     NNet::NNet(const std::vector<Linear>& topology){
         size = topology.size();
         layers = topology;
     }
 
     void NNet::propagate_front(const matrix<double>& input) {
+        input_layer = input;
         {
             layers[0].get_input(input);
-            //      std::cout << layers[0].get_output() << std::endl;
             if (0 == size - 1) {
                 // soft_max
                 layers[0].soft_max();
@@ -70,11 +83,9 @@ namespace net {
                 // ReLU
                 layers[0].apply_activation_function();
             }
-            //      std::cout << layers[0].get_output() << std::endl;
         }
         for (int layer = 1; layer < size; ++layer){
             layers[layer].get_input(layers[layer - 1].get_output());
-            //      std::cout << layers[layer].get_output() << std::endl;
             // crutch TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! only for linear classification
             if (layer == size - 1) {
                 // soft_max
@@ -83,11 +94,34 @@ namespace net {
                 // ReLU
                 layers[layer].apply_activation_function();
             }
-            //      std::cout << layers[layer].get_output() << std::endl;
         }
     }
 
+    matrix<double>& NNet::get_output(){
+        return layers.back().get_output();
+    }
+    const matrix<double>& NNet::get_output() const{
+        return layers.back().get_output();
+    }
+
     void NNet::propagate_back(const matrix<double> &loss) {
+        // propagating for the first layer
+        auto& delta = layers.back().apply_derivative_function();
+        delta = aggregate(delta, loss, [](double a, double b){ // delta *= loss;
+            return a * b;
+        });
+
+        auto& weights = layers.back().get_weights();
+        weights -= ((size == 1 ? input_layer.transpose() : layers[size-2].get_output().transpose()) * delta); // TODO may be +=
+        // propagating for the others
+        for (int layer = size-2; layer >= 0; --layer){
+            delta *= layers[layer].get_weights();
+            delta = aggregate(delta, layers[layer].apply_derivative_function(), [](double a, double b){ // delta *= layers[layer].apply_derivative_function();
+                return a * b;
+            });
+            auto& weights1 = layers[layer].get_weights();
+            weights1 -= ((layer == 0 ? input_layer.transpose() : layers[layer-1].get_output().transpose()) * delta); // TODO may be +=
+        }
     }
 
     double Loss::sum(){

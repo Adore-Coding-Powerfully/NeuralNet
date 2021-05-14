@@ -13,9 +13,11 @@ namespace net{
         const matrix<double>& get_output() const;
         void soft_max();
         void apply_activation_function();
+        matrix<double>& apply_derivative_function();
+        matrix<double>& get_weights();
     private:
         int input_size, output_size;
-        matrix<double> layer, bias, weights; // matrix [...] 1xsize
+        matrix<double> layer, not_activated_layer, bias, weights; // matrix [...] 1xsize
     };
 
     class NNet{
@@ -24,15 +26,13 @@ namespace net{
         NNet(const std::vector<Linear>& topology);
         void propagate_front(const matrix<double>& input);
         void propagate_back(const matrix<double>& loss);
-        matrix<double>& get_output(){
-            return layers.back().get_output();
-        }
-        const matrix<double>& get_output() const{
-            return layers.back().get_output();
-        }
+        matrix<double>& get_output();
+        const matrix<double>& get_output() const;
     private:
+        double lr = 0.3;
         int size;
         std::vector<Linear> layers;
+        matrix<double> input_layer;
     };
 
     class Loss{
