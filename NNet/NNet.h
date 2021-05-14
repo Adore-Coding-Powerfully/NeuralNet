@@ -8,14 +8,14 @@ namespace net{
         Linear() = delete;
         Linear(int input_size, int output_size);
         void get_input(const matrix<double>& input);
-        void push_forward();
+        void push_forward(const matrix<double>& input_layer);
         matrix<double>& get_output();
         const matrix<double>& get_output() const;
         void soft_max();
         void apply_activation_function();
     private:
         int input_size, output_size;
-        matrix<double> input_layer, output_layer, bias, weights; // matrix [...] 1xsize
+        matrix<double> layer, bias, weights; // matrix [...] 1xsize
     };
 
     class NNet{

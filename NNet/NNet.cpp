@@ -4,41 +4,52 @@ namespace net {
     Linear::Linear(int input_size, int output_size) {
         this->input_size = input_size;
         this->output_size = output_size;
-        input_layer = matrix<double>(1, input_size);
-        output_layer = matrix<double>(1, output_size);
+        layer = matrix<double>(1, output_size);
         bias = matrix<double>(output_size, 1);
         weights = matrix<double>(input_size, output_size);
+        {
+            // TODO write function fill with random
+            std::mt19937 rnd(42);
+            std::uniform_real_distribution<double> dist(-1, 2);
+            for (int i = 0; i < input_size; ++i)
+                for (int j = 0; j < output_size; ++j)
+                    weights[i][j] = dist(rnd);
+        }
     }
 
     matrix<double>& Linear::get_output(){
-        return output_layer;
+        return layer;
     }
     const matrix<double>& Linear::get_output() const{
-        return output_layer;
+        return layer;
     }
 
-    void Linear::get_input(const matrix<double>& input){
+    void Linear::get_input(const matrix<double>& input_layer){
         // receiving input
-        ASSERT((input.row_size() == 1 && input.col_size() == input_size), "incorrect input size");
-        input_layer = input;
+        ASSERT((input_layer.row_size() == 1 && input_layer.col_size() == input_size), "incorrect input size");
 
         // converting to output
-        push_forward();
+        push_forward(input_layer);
     }
 
-    void Linear::push_forward(){
-        output_layer = input_layer * weights;
+    void Linear::push_forward(const matrix<double>& input_layer){
+        layer = input_layer * weights;
     }
 
     void Linear::soft_max(){
-        double sum = output_layer.sum();
-        output_layer.aggregate([&sum](double& value){
-            value /= sum;
+        // TODO aggregate with not void
+        double sum = 0;
+        {
+            for (int i = 0; i < output_size; ++i)
+                sum += std::exp(layer[0][i]);
+        }
+        layer.aggregate([&sum](double& value){
+            value = std::exp(value) / sum;
         });
     }
 
     void Linear::apply_activation_function(){
-        output_layer.aggregate([](double& value){
+        layer.aggregate([](double& value){
             value = ReLU(value);
         });
     }
@@ -49,10 +60,21 @@ namespace net {
     }
 
     void NNet::propagate_front(const matrix<double>& input) {
-        layers[0].get_input(input);
+        {
+            layers[0].get_input(input);
+            //      std::cout << layers[0].get_output() << std::endl;
+            if (0 == size - 1) {
+                // soft_max
+                layers[0].soft_max();
+            } else {
+                // ReLU
+                layers[0].apply_activation_function();
+            }
+            //      std::cout << layers[0].get_output() << std::endl;
+        }
         for (int layer = 1; layer < size; ++layer){
             layers[layer].get_input(layers[layer - 1].get_output());
-            std::cout << layers[layer].get_output() << std::endl;
+            //      std::cout << layers[layer].get_output() << std::endl;
             // crutch TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! only for linear classification
             if (layer == size - 1) {
                 // soft_max
@@ -61,12 +83,11 @@ namespace net {
                 // ReLU
                 layers[layer].apply_activation_function();
             }
-            std::cout << layers[layer].get_output() << std::endl;
+            //      std::cout << layers[layer].get_output() << std::endl;
         }
     }
 
     void NNet::propagate_back(const matrix<double> &loss) {
-
     }
 
     double Loss::sum(){
